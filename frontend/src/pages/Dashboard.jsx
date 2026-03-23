@@ -223,7 +223,7 @@ export default function Dashboard({ onLogout }) {
       // IMPORTANT: Use fetch directly instead of axios to avoid issues
       const token = localStorage.getItem('stt_token');
 
-      const response = await fetch('http://localhost:5000/api/transcribe', {
+      const response = await fetch('https://audioscribe-2.onrender.com/api/transcribe', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -276,7 +276,7 @@ export default function Dashboard({ onLogout }) {
 
       // Try to refresh history
       try {
-        const historyResponse = await fetch('http://localhost:5000/api/transcribe/history', {
+        const historyResponse = await fetch('https://audioscribe-2.onrender.com/api/transcribe/history', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -304,7 +304,7 @@ export default function Dashboard({ onLogout }) {
 
       if (error.message.includes("Failed to fetch")) {
         errorMessage = "Cannot connect to server";
-        suggestion = "Make sure backend is running on localhost:5000";
+        suggestion = "Make sure backend is running";
       } else if (error.message.includes("401") || error.message.includes("403")) {
         errorMessage = "Authentication failed";
         suggestion = "Try logging out and back in";
