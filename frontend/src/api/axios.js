@@ -1,9 +1,10 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://audioscribe-2.onrender.com/api", // your backend URL
-  withCredentials: true, // useful for auth later
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api",
+  withCredentials: true,
 });
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("stt_token");
   if (token) {
