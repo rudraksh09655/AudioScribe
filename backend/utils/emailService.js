@@ -75,15 +75,25 @@ class EmailService {
     try {
       // Use Resend if configured
       if (this.provider === 'resend') {
-        const result = await this.resend.emails.send({
-          from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
-          to: to,
+        const fromName = process.env.FROM_NAME || 'AudioScribe';
+        const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+
+        console.log(`📧 Sending email via Resend to: ${to}, from: ${fromName} <${fromEmail}>`);
+
+        const { data, error } = await this.resend.emails.send({
+          from: `${fromName} <${fromEmail}>`,
+          to: [to],
           subject: subject,
           html: html,
         });
 
-        console.log('✅ Email sent via Resend:', result.id);
-        return { success: true, messageId: result.id, provider: 'resend' };
+        if (error) {
+          console.error('❌ Resend API error:', JSON.stringify(error, null, 2));
+          return { success: false, error: error.message || JSON.stringify(error), provider: 'resend' };
+        }
+
+        console.log('✅ Email sent via Resend:', data?.id);
+        return { success: true, messageId: data?.id, provider: 'resend' };
       }
 
       // Use SMTP (Ethereal or custom)
