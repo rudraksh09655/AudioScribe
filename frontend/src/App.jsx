@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import VerifyEmail from './pages/VerifyEmail';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -32,9 +31,6 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Landing />} />
-
-        {/* Public verification route */}
-        <Route path="/verify-email" element={<VerifyEmail />} />
 
         <Route
           path="/auth"

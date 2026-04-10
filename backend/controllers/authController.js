@@ -1,6 +1,5 @@
 const User = require('../models/User');
 const { generateToken } = require('../utils/jwt');
-const emailService = require('../utils/emailService');
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -26,35 +25,11 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Create user (password should be hashed by User model)
+    // Create user (password is hashed by User model pre-save hook)
     const user = await User.create({
       name,
       email,
       password
-    });
-
-    // Generate email verification token
-    const verificationToken = emailService.generateVerificationToken();
-    user.emailVerificationToken = verificationToken;
-    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-    await user.save();
-
-    // Send welcome email with verification link (non-blocking)
-    emailService.sendEmail(
-      user.email,
-      'Welcome to Speech-to-Text! Verify Your Email',
-      emailService.getWelcomeEmail(user.name, verificationToken)
-    ).then(result => {
-      if (result.success) {
-        console.log('✅ Welcome email sent to:', user.email);
-        if (result.previewUrl) {
-          console.log('📧 Preview:', result.previewUrl);
-        }
-      } else {
-        console.error('❌ Failed to send welcome email:', result.error);
-      }
-    }).catch(err => {
-      console.error('❌ Email service error:', err);
     });
 
     // Generate token
@@ -62,7 +37,7 @@ exports.register = async (req, res, next) => {
 
     res.status(201).json({
       status: 'success',
-      message: 'Account created successfully! Please check your email to verify your account.',
+      message: 'Account created successfully!',
       token,
       user: {
         id: user._id,
@@ -70,7 +45,6 @@ exports.register = async (req, res, next) => {
         email: user.email,
         role: user.role,
         plan: user.plan,
-        isEmailVerified: user.isEmailVerified,
         transcriptionsCount: user.transcriptionsCount,
         settings: user.settings
       }
