@@ -31,7 +31,7 @@
 ### 🔐 Authentication & User Management
 - **User Registration** with name, email, and password
 - **User Login** with JWT-based authentication (7-day token expiry)
-- **Email Verification** — welcome email sent via Resend with a verification link
+
 - **Password Hashing** using bcryptjs with salt rounds
 - **Token Refresh** endpoint for extending sessions
 - **Account Deletion** — users can permanently delete their account
@@ -86,8 +86,7 @@
 | **JSON Web Token** | 9.0.3 | JWT authentication |
 | **bcryptjs** | 3.0.3 | Password hashing |
 | **Multer** | 2.0.2 | File upload handling |
-| **Resend** | 6.9.1 | Transactional email service |
-| **Nodemailer** | 7.0.13 | Email transport |
+
 | **CORS** | 2.8.6 | Cross-origin resource sharing |
 | **dotenv** | 17.2.3 | Environment variable management |
 
@@ -99,7 +98,7 @@
 | **Vercel** | Frontend hosting & deployment |
 | **Render** | Backend hosting & deployment |
 | **Deepgram** | AI transcription engine (pre-recorded & live streaming) |
-| **Resend** | Email delivery for verification emails |
+
 
 ---
 
@@ -193,7 +192,7 @@ AudioScribe/
 │   │   ├── authController.js          # Register, login, getMe, settings, delete, refresh
 │   │   ├── transcriptionController.js # Transcribe, history, CRUD, stats
 │   │   ├── userController.js          # Profile, stats, settings
-│   │   └── verificationController.js  # Email verification & resend
+│   │   └── verificationController.js  # (disabled — stub only)
 │   │
 │   ├── middleware/
 │   │   ├── auth.js                    # JWT authentication middleware
@@ -210,7 +209,7 @@ AudioScribe/
 │   │
 │   ├── utils/
 │   │   ├── deepgram.js                # Deepgram SDK wrapper (Nova-2, pre-recorded)
-│   │   ├── emailService.js            # Resend email service (welcome, verification)
+│   │   ├── emailService.js            # Email service (disabled — stub only)
 │   │   ├── fileUpload.js              # Multer config (file type/size validation, cleanup)
 │   │   └── jwt.js                     # JWT generate, verify, decode
 │   │
@@ -227,7 +226,7 @@ AudioScribe/
     │
     └── src/
         ├── main.jsx                   # React entry point (ThemeProvider, Toaster)
-        ├── App.jsx                    # Router setup (Landing, Auth, Dashboard, VerifyEmail)
+        ├── App.jsx                    # Router setup (Landing, Auth, Dashboard)
         ├── index.css                  # Global styles & Tailwind imports
         │
         ├── api/
@@ -248,8 +247,7 @@ AudioScribe/
         └── pages/
             ├── Landing.jsx            # Landing page (Navbar + Hero + Features + HowItWorks + Footer)
             ├── Auth.jsx               # Login/Register page with animations
-            ├── Dashboard.jsx          # Main dashboard (record, upload, transcribe, history)
-            └── VerifyEmail.jsx        # Email verification status page
+            └── Dashboard.jsx          # Main dashboard (record, upload, transcribe, history)
 ```
 
 ---
@@ -262,7 +260,6 @@ AudioScribe/
 - **npm** v9 or higher
 - **MongoDB Atlas** account (free tier works)
 - **Deepgram** API key (free at [console.deepgram.com](https://console.deepgram.com/signup))
-- **Resend** API key (free at [resend.com](https://resend.com))
 
 ### Environment Variables
 
@@ -289,11 +286,6 @@ UPLOAD_PATH=./uploads
 
 # CORS Configuration
 CLIENT_URL=http://localhost:5173
-
-# Resend Email Configuration
-RESEND_API_KEY=your_resend_api_key_here
-FROM_EMAIL=onboarding@resend.dev
-FROM_NAME=AudioScribe
 ```
 
 #### Frontend (`frontend/.env`)
@@ -343,12 +335,10 @@ The frontend will start on `http://localhost:5173`.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/register` | ❌ | Register a new user and send verification email |
+| `POST` | `/register` | ❌ | Register a new user |
 | `POST` | `/login` | ❌ | Login with email & password, returns JWT |
-| `GET` | `/verify-email/:token` | ❌ | Verify email address via token link |
 | `GET` | `/me` | ✅ | Get current authenticated user details |
 | `PUT` | `/settings` | ✅ | Update user settings |
-| `POST` | `/resend-verification` | ✅ | Resend email verification email |
 | `DELETE` | `/delete` | ✅ | Permanently delete user account |
 | `POST` | `/refresh-token` | ✅ | Refresh JWT token |
 
@@ -421,9 +411,6 @@ The frontend will start on `http://localhost:5173`.
    - `JWT_EXPIRE`
    - `DEEPGRAM_API_KEY`
    - `CLIENT_URL` = `https://your-frontend.vercel.app` (no trailing slash!)
-   - `RESEND_API_KEY`
-   - `FROM_EMAIL`
-   - `FROM_NAME`
    - `MAX_FILE_SIZE`
    - `NODE_ENV` = `production`
 
