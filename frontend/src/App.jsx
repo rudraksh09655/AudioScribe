@@ -12,9 +12,8 @@ function App() {
   // Check if user is logged in on page load
   useEffect(() => {
     const token = localStorage.getItem('stt_token');
-    if (token === 'authenticated') {
+    if (token) {
       setIsAuthenticated(true);
-      toast.success('Welcome back!', { duration: 2000 });
     }
   }, []);
 

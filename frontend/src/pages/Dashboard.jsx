@@ -220,26 +220,16 @@ export default function Dashboard({ onLogout }) {
         console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
       }
 
-      // IMPORTANT: Use fetch directly instead of axios to avoid issues
-      const token = localStorage.getItem('stt_token');
-
-      const response = await fetch('https://audioscribe-2.onrender.com/api/transcribe', {
-        method: 'POST',
+      // Use axios api instance - it handles auth token and base URL
+      const response = await api.post('/transcribe', formData, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          // DO NOT set Content-Type for FormData - browser will set it with boundary
+          'Content-Type': 'multipart/form-data',
         },
-        body: formData
       });
 
       console.log("📥 Response received. Status:", response.status);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Server error ${response.status}: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       console.log("✅ Success response:", data);
 
       // Extract transcription
@@ -276,17 +266,10 @@ export default function Dashboard({ onLogout }) {
 
       // Try to refresh history
       try {
-        const historyResponse = await fetch('https://audioscribe-2.onrender.com/api/transcribe/history', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json();
-          if (historyData.data?.transcriptions) {
-            setHistory(historyData.data.transcriptions);
-          }
+        const historyRes = await api.get('/transcribe/history');
+        const transcriptions = historyRes.data?.data?.transcriptions || historyRes.data || [];
+        if (Array.isArray(transcriptions)) {
+          setHistory(transcriptions);
         }
       } catch (historyErr) {
         console.log("History refresh skipped:", historyErr.message);
