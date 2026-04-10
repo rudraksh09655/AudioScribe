@@ -47,9 +47,17 @@ export default function Dashboard({ onLogout }) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [interimText, setInterimText] = useState("");
+  const [wsConnected, setWsConnected] = useState(false);
 
   const audioRef = useRef(null);
   const timerRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const wsRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const liveTranscriptRef = useRef("");
   const navigate = useNavigate();
 
   // Mock data for empty state
@@ -104,10 +112,96 @@ export default function Dashboard({ onLogout }) {
   };
 
   /* ===============================
-     RECORDING (UI ONLY)
+     RECORDING WITH LIVE TRANSCRIPTION
   =============================== */
-  const toggleRecording = () => {
-    if (!isRecording) {
+  const getWebSocketUrl = () => {
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+    // Convert http(s)://host/api to ws(s)://host
+    const wsUrl = apiUrl
+      .replace(/\/api\/?$/, '')
+      .replace(/^http/, 'ws');
+    return wsUrl;
+  };
+
+  const startRecording = async () => {
+    try {
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      streamRef.current = stream;
+
+      // Reset transcript state
+      setLiveTranscript("");
+      setInterimText("");
+      setTranscription("");
+      liveTranscriptRef.current = "";
+      audioChunksRef.current = [];
+
+      // Connect WebSocket to backend
+      const token = localStorage.getItem('stt_token');
+      const wsUrl = `${getWebSocketUrl()}/ws/transcribe?token=${token}`;
+      console.log('🔌 Connecting WebSocket:', wsUrl);
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        setWsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'status' && msg.message === 'ready') {
+            console.log('✅ Deepgram ready, starting MediaRecorder');
+            startMediaRecorder(stream);
+          }
+
+          if (msg.type === 'transcript') {
+            if (msg.is_final) {
+              // Final transcript - append to accumulated text
+              liveTranscriptRef.current += (liveTranscriptRef.current ? ' ' : '') + msg.text;
+              setLiveTranscript(liveTranscriptRef.current);
+              setInterimText("");
+              // Also update the main transcription display
+              setTranscription(liveTranscriptRef.current);
+            } else {
+              // Interim transcript - show as preview
+              setInterimText(msg.text);
+            }
+          }
+
+          if (msg.type === 'error') {
+            console.error('WebSocket error:', msg.message);
+            toast.error(msg.message);
+          }
+        } catch (err) {
+          console.error('WS message parse error:', err);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('🔌 WebSocket disconnected');
+        setWsConnected(false);
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        toast.error('Connection to transcription service failed');
+        stopRecording();
+      };
+
+      setIsRecording(true);
+      setRecordingTime(0);
+
       toast.success(
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
@@ -117,20 +211,117 @@ export default function Dashboard({ onLogout }) {
           </div>
         </div>
       );
-      setRecordingTime(0);
-    } else {
-      toast(
-        <div className="flex items-center gap-3">
-          <Square className="w-5 h-5" />
-          <div>
-            <p className="font-medium">Recording stopped</p>
-            <p className="text-sm opacity-80">Duration: {formatTime(recordingTime)}</p>
-          </div>
-        </div>
-      );
+
+    } catch (err) {
+      console.error('Microphone access error:', err);
+      if (err.name === 'NotAllowedError') {
+        toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
+      } else {
+        toast.error('Could not access microphone: ' + err.message);
+      }
     }
-    setIsRecording(!isRecording);
   };
+
+  const startMediaRecorder = (stream) => {
+    try {
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus',
+      });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          // Save chunks for later playback
+          audioChunksRef.current.push(event.data);
+
+          // Stream to WebSocket for live transcription
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(event.data);
+          }
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log('MediaRecorder stopped');
+        // Create audio blob for playback
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(audioBlob);
+        setAudioUrl(url);
+        // Create a File object so the "Generate Transcript" button can also use it
+        const recordedFile = new File([audioBlob], `recording-${Date.now()}.webm`, {
+          type: 'audio/webm',
+        });
+        setAudioFile(recordedFile);
+      };
+
+      // Start recording with 250ms timeslice for streaming
+      mediaRecorder.start(250);
+      console.log('🎙️ MediaRecorder started with 250ms timeslice');
+    } catch (err) {
+      console.error('MediaRecorder error:', err);
+      toast.error('Recording failed: ' + err.message);
+    }
+  };
+
+  const stopRecording = () => {
+    // Stop MediaRecorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+
+    // Stop mic stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    // Close WebSocket
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+
+    setIsRecording(false);
+    setInterimText("");
+    setWsConnected(false);
+
+    // Set final transcription
+    if (liveTranscriptRef.current) {
+      setTranscription(liveTranscriptRef.current);
+    }
+
+    toast(
+      <div className="flex items-center gap-3">
+        <Square className="w-5 h-5" />
+        <div>
+          <p className="font-medium">Recording stopped</p>
+          <p className="text-sm opacity-80">Duration: {formatTime(recordingTime)}</p>
+        </div>
+      </div>
+    );
+  };
+
+  const toggleRecording = () => {
+    if (!isRecording) {
+      startRecording();
+    } else {
+      stopRecording();
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   /* ===============================
      FILE UPLOAD
@@ -190,11 +381,13 @@ export default function Dashboard({ onLogout }) {
     try {
       // Stop recording if active
       if (isRecording) {
-        setIsRecording(false);
-        // For now, recording needs separate handling
-        toast.error("Please upload a file for transcription", { id: toastId });
-        setIsTranscribing(false);
-        return;
+        stopRecording();
+        // If we already have live transcript, use it
+        if (liveTranscriptRef.current) {
+          toast.success('Transcription from live recording is ready!', { id: toastId });
+          setIsTranscribing(false);
+          return;
+        }
       }
 
       // Validate file
@@ -839,26 +1032,36 @@ export default function Dashboard({ onLogout }) {
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">Transcription</h3>
                       <p className="text-sm text-gray-600">
-                        {transcription ? "Click actions below to copy or download" : "Your transcript will appear here"}
+                        {isRecording
+                          ? "🔴 Live transcription in progress..."
+                          : transcription
+                            ? "Click actions below to copy or download"
+                            : "Your transcript will appear here"}
                       </p>
                     </div>
                   </div>
-                  {transcription && (
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {isRecording && (
+                      <span className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-200 rounded-full text-sm text-red-600 font-medium">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        LIVE
+                      </span>
+                    )}
+                    {transcription && (
                       <span className="text-sm text-gray-500">
                         {transcription.split(' ').length} words
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Content */}
               <div className="p-6">
-                {transcription ? (
+                {transcription || isRecording ? (
                   <div className="space-y-6">
                     {/* Audio Preview */}
-                    {audioUrl && (
+                    {audioUrl && !isRecording && (
                       <div className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center gap-4">
                           <button
@@ -876,13 +1079,24 @@ export default function Dashboard({ onLogout }) {
                     )}
 
                     {/* Transcription Text */}
-                    <div className="bg-gray-50 rounded-xl p-6">
-                      <pre className="text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
-                        {transcription}
-                      </pre>
+                    <div className={`rounded-xl p-6 ${isRecording ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200' : 'bg-gray-50'}`}>
+                      {isRecording && !transcription && !interimText ? (
+                        <div className="flex items-center gap-3 text-gray-500">
+                          <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                          <span className="text-sm">Listening... Start speaking to see live transcription</span>
+                        </div>
+                      ) : (
+                        <pre className="text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                          {transcription}
+                          {interimText && (
+                            <span className="text-blue-500 opacity-70">{transcription ? ' ' : ''}{interimText}</span>
+                          )}
+                        </pre>
+                      )}
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions - only show when not recording */}
+                    {!isRecording && transcription && (
                     <div className="flex flex-wrap gap-4">
                       <motion.button
                         whileHover={{ scale: 1.05 }}
@@ -926,6 +1140,7 @@ export default function Dashboard({ onLogout }) {
                         Share Link
                       </motion.button>
                     </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-16">
