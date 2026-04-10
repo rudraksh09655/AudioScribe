@@ -418,16 +418,6 @@ The frontend will start on `http://localhost:5173`.
 
 ---
 
-## 📸 Screenshots
-
-> Upload screenshots of your deployed app and replace the placeholders below.
-
-| Landing Page | Auth Page | Dashboard |
-|---|---|---|
-| Home page with features | Login/Signup form | Recording & transcription |
-
----
-
 ## 👤 Author
 
 **Rudraksh Gupta**
